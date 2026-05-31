@@ -826,7 +826,7 @@ export default function Workspace() {
     }
   };
 
-  const handleUpdateStudyProgress = async (itemId, status, score) => {
+  const handleUpdateStudyProgress = useCallback(async (itemId, status, score) => {
     if (!activeStudySession) return;
     try {
       const res = await fetch('/api/artifacts/progress', {
@@ -846,7 +846,7 @@ export default function Workspace() {
     } catch (err) {
       console.error('Error updating progress:', err);
     }
-  };
+  }, [activeStudySession]);
 
   const handleQuizTimeout = useCallback(async () => {
     if (!activeStudySession) return;
