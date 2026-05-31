@@ -267,7 +267,7 @@ export default function Dashboard() {
               <div className={styles.cardFooter}>
                 <div className={styles.cardMeta}>
                   <Calendar size={12} />
-                  <span>{formatDate(notebook.updated_at)}</span>
+                  <span suppressHydrationWarning>{formatDate(notebook.updated_at)}</span>
                 </div>
                 {notebook.chat_model && (
                   <span className={styles.cardModelBadge}>

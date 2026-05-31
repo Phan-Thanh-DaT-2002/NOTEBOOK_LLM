@@ -179,11 +179,19 @@ export async function POST(request) {
 
       } catch (streamErr) {
         console.error('[Chat Stream Route] Stream loop failed:', streamErr);
-        await writer.write(
-          encoder.encode(`event: error\ndata: ${JSON.stringify({ message: streamErr.message })}\n\n`)
-        );
+        try {
+          await writer.write(
+            encoder.encode(`event: error\ndata: ${JSON.stringify({ message: streamErr.message })}\n\n`)
+          );
+        } catch (e) {
+          // ignore
+        }
       } finally {
-        await writer.close();
+        try {
+          await writer.close();
+        } catch (e) {
+          // ignore
+        }
       }
     })();
 

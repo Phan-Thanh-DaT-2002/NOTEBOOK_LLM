@@ -1624,7 +1624,7 @@ export default function Workspace() {
                               <div style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {art.title}
                               </div>
-                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }} suppressHydrationWarning>
                                 {new Date(art.created_at).toLocaleDateString('vi-VN')}
                               </div>
                             </div>
