@@ -5,6 +5,8 @@ import { retrieveContext } from '@/lib/rag/retriever.js';
 import { buildPrompt } from '@/lib/rag/promptBuilder.js';
 import { getChatStream } from '@/lib/providers/chat-stream.js';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -165,9 +167,11 @@ export async function POST(request) {
 
     return new Response(responseStream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'Content-Encoding': 'none',
       }
     });
 
