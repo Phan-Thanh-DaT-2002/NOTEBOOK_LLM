@@ -1214,10 +1214,10 @@ export default function Workspace() {
                                   let contentStr = msg.content || '';
                                   let thinkingHtml = '';
 
-                                  // Extract and style closed <think> blocks
+                                                                    // Extract and style closed <think> blocks
                                   contentStr = contentStr.replace(/<think>([\s\S]*?)<\/think>/gi, (match, thinkingText) => {
                                     thinkingHtml += `
-                                      <div style="
+                                      <details style="
                                         background: rgba(255, 255, 255, 0.02);
                                         border-left: 2px solid var(--accent);
                                         padding: 8px 12px;
@@ -1225,24 +1225,35 @@ export default function Workspace() {
                                         border-radius: 4px;
                                         font-size: 11.5px;
                                         color: var(--text-muted);
-                                        font-style: italic;
                                         width: 100%;
                                       ">
-                                        <div style="display: flex; align-items: center; gap: 6px; font-weight: bold; margin-bottom: 4px; color: var(--accent); font-style: normal; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em;">
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-4.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-4.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2Z"/></svg>
-                                          Tiến trình suy nghĩ của AI:
-                                        </div>
-                                        <div style="opacity: 0.85;">${md.render(thinkingText)}</div>
-                                      </div>
+                                        <summary style="
+                                          display: flex;
+                                          align-items: center;
+                                          gap: 6px;
+                                          font-weight: bold;
+                                          color: var(--accent);
+                                          text-transform: uppercase;
+                                          font-size: 10px;
+                                          letter-spacing: 0.05em;
+                                          cursor: pointer;
+                                          list-style: none;
+                                          user-select: none;
+                                        ">
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 2px;"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-4.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-4.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2Z"/></svg>
+                                          Tiến trình suy nghĩ của AI (Nhấp để mở rộng)
+                                        </summary>
+                                        <div style="opacity: 0.85; margin-top: 8px; font-style: italic; line-height: 1.5;">${md.render(thinkingText)}</div>
+                                      </details>
                                     `;
                                     return '';
                                   });
 
-                                  // Extract and style unclosed streaming <think> blocks
+                                                                    // Extract and style unclosed streaming <think> blocks
                                   if (contentStr.includes('<think>')) {
                                     contentStr = contentStr.replace(/<think>([\s\S]*)$/gi, (match, thinkingText) => {
                                       thinkingHtml += `
-                                        <div style="
+                                        <details style="
                                           background: rgba(255, 255, 255, 0.02);
                                           border-left: 2px solid var(--accent);
                                           padding: 8px 12px;
@@ -1250,15 +1261,26 @@ export default function Workspace() {
                                           border-radius: 4px;
                                           font-size: 11.5px;
                                           color: var(--text-muted);
-                                          font-style: italic;
                                           width: 100%;
                                         ">
-                                          <div style="display: flex; align-items: center; gap: 6px; font-weight: bold; margin-bottom: 4px; color: var(--accent); font-style: normal; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em;">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: pulse 1.5s infinite;"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-4.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-4.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2Z"/></svg>
-                                            AI đang suy nghĩ...
-                                          </div>
-                                          <div style="opacity: 0.85;">${md.render(thinkingText)}</div>
-                                        </div>
+                                          <summary style="
+                                            display: flex;
+                                            align-items: center;
+                                            gap: 6px;
+                                            font-weight: bold;
+                                            color: var(--accent);
+                                            text-transform: uppercase;
+                                            font-size: 10px;
+                                            letter-spacing: 0.05em;
+                                            cursor: pointer;
+                                            list-style: none;
+                                            user-select: none;
+                                          ">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: pulse 1.5s infinite; margin-right: 2px;"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-4.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-4.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2Z"/></svg>
+                                            AI đang suy nghĩ... (Nhấp để mở rộng)
+                                          </summary>
+                                          <div style="opacity: 0.85; margin-top: 8px; font-style: italic; line-height: 1.5;">${md.render(thinkingText)}</div>
+                                        </details>
                                       `;
                                       return '';
                                     });
