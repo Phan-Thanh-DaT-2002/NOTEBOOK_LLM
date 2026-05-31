@@ -1,0 +1,15 @@
+CREATE INDEX IF NOT EXISTS idx_sources_notebook ON sources(notebook_id);
+CREATE INDEX IF NOT EXISTS idx_sources_hash ON sources(content_hash);
+CREATE INDEX IF NOT EXISTS idx_source_versions_source ON source_versions(source_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_source ON chunks(source_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_notebook ON chunks(notebook_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_version ON chunks(source_version_id);
+CREATE INDEX IF NOT EXISTS idx_messages_notebook ON chat_messages(notebook_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_citations_message ON citations(message_id);
+CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id);
+CREATE INDEX IF NOT EXISTS idx_notes_notebook ON notes(notebook_id);
+CREATE INDEX IF NOT EXISTS idx_artifacts_notebook ON artifacts(notebook_id);
+CREATE INDEX IF NOT EXISTS idx_artifact_items_artifact ON artifact_items(artifact_id);
+CREATE INDEX IF NOT EXISTS idx_embedding_jobs_source ON embedding_jobs(source_id);
+CREATE INDEX IF NOT EXISTS idx_study_progress_artifact ON study_progress(artifact_id);
+CREATE INDEX IF NOT EXISTS idx_model_calls_notebook ON model_calls(notebook_id);
