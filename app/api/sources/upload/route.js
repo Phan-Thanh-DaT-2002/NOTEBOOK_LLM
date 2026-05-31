@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db/connection.js';
 import { enqueueSourceIngestion } from '@/lib/jobs/queue.js';
+import crypto from 'crypto';
 
 export async function POST(request) {
   try {

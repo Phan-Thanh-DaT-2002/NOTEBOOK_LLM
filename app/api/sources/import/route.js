@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db/connection.js';
 import { enqueueSourceIngestion } from '@/lib/jobs/queue.js';
+import crypto from 'crypto';
 import { getYouTubeId } from '@/lib/parsers/youtube.js';
 
 export async function POST(request) {
