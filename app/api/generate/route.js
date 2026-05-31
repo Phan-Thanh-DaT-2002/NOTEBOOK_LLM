@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db/connection.js';
 import { generateCompletion } from '@/lib/providers/llm.js';
+import crypto from 'crypto';
 
 export async function POST(request) {
   try {

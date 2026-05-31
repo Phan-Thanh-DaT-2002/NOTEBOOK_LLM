@@ -72,6 +72,7 @@ export default function Workspace() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // Layout Panel States
   const [sourcesCollapsed, setSourcesCollapsed] = useState(false);
@@ -233,7 +234,8 @@ export default function Workspace() {
       role: 'assistant', 
       content: '', 
       created_at: new Date().toISOString(),
-      citations: []
+      citations: [],
+      webSources: []
     };
 
     setMessages(prev => [...prev, tempUserMsg, tempAssistantMsg]);
@@ -242,7 +244,7 @@ export default function Workspace() {
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notebookId, question: queryText }),
+        body: JSON.stringify({ notebookId, question: queryText, webSearchEnabled }),
       });
 
       if (!response.ok) {
@@ -283,6 +285,10 @@ export default function Workspace() {
               } else if (currentEvent === 'citations') {
                 setMessages(prev => prev.map(m => 
                   m.id === tempAssistantMsg.id ? { ...m, citations: json } : m
+                ));
+              } else if (currentEvent === 'web_sources') {
+                setMessages(prev => prev.map(m => 
+                  m.id === tempAssistantMsg.id ? { ...m, webSources: json } : m
                 ));
               } else if (currentEvent === 'done') {
                 setMessages(prev => prev.map(m => 
@@ -1206,6 +1212,14 @@ export default function Workspace() {
                               dangerouslySetInnerHTML={{
                                 __html: (() => {
                                   let html = md.render(msg.content || '');
+                                  // Replace Web citations first
+                                  html = html.replace(/\[Web Result (\d+)\]/g, (match, digit) => {
+                                    const index = parseInt(digit, 10);
+                                    const ws = msg.webSources?.[index - 1];
+                                    const titleStr = ws ? `Nguồn web: ${ws.title}\n${ws.url}` : 'Xem liên kết';
+                                    return ws ? `<a href="${ws.url}" target="_blank" rel="noopener noreferrer" title="${titleStr}" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 184, 148, 0.15); border: 1px solid rgba(0, 184, 148, 0.3); color: #00b894; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 4px; margin: 0 2px; text-decoration: none; vertical-align: super;"><span style="display: inline-flex; align-items: center; gap: 2px;"><svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg> Web ${index}</span></a>` : `<span style="display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 184, 148, 0.15); border: 1px solid rgba(0, 184, 148, 0.3); color: #00b894; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 4px; margin: 0 2px; vertical-align: super;">Web ${index}</span>`;
+                                  });
+                                  // Replace Local citations second
                                   return html.replace(/\[(\d+)\]/g, (match, digit) => {
                                     const index = parseInt(digit, 10);
                                     const cit = msg.citations?.find(c => c.citation_index === index);
@@ -1215,6 +1229,62 @@ export default function Workspace() {
                                 })()
                               }}
                             />
+                            {msg.webSources && msg.webSources.length > 0 && (
+                              <div style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: '6px',
+                                paddingLeft: '12px',
+                                marginTop: '4px',
+                                marginBottom: '4px'
+                              }}>
+                                <span style={{
+                                  fontSize: '10px',
+                                  color: 'var(--text-muted)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  width: '100%',
+                                  fontWeight: 'bold',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em'
+                                }}>
+                                  <Globe size={10} style={{ color: 'var(--accent)' }} /> Đã tra cứu nguồn internet:
+                                </span>
+                                {msg.webSources.map((ws, wIdx) => (
+                                  <a 
+                                    key={wIdx}
+                                    href={ws.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={ws.snippet}
+                                    style={{
+                                      fontSize: '10px',
+                                      color: 'var(--accent)',
+                                      background: 'rgba(108, 92, 231, 0.08)',
+                                      border: '1px solid rgba(108, 92, 231, 0.2)',
+                                      padding: '2px 8px',
+                                      borderRadius: '12px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      textDecoration: 'none',
+                                      transition: 'all 0.2s ease',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = 'rgba(108, 92, 231, 0.15)';
+                                      e.currentTarget.style.borderColor = 'var(--accent)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = 'rgba(108, 92, 231, 0.08)';
+                                      e.currentTarget.style.borderColor = 'rgba(108, 92, 231, 0.2)';
+                                    }}
+                                  >
+                                    <Globe size={8} /> {ws.title.length > 25 ? ws.title.substring(0, 25) + '...' : ws.title}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
                             {!isStreaming && msg.content && (
                               <button 
                                 onClick={() => handleSaveResponseToNote(msg)}
@@ -1261,23 +1331,62 @@ export default function Workspace() {
                 onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
                 className={styles.chatInputWrapper}
               >
+                <button
+                  type="button"
+                  onClick={() => setWebSearchEnabled(prev => !prev)}
+                  title={webSearchEnabled ? "Tắt tra mạng (Web Search ON)" : "Bật tra mạng (Web Search OFF)"}
+                  aria-label="Toggle Web Search"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: 'var(--radius-md)',
+                    background: webSearchEnabled ? 'rgba(108, 92, 231, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                    border: webSearchEnabled ? '1px solid var(--accent)' : '1px solid rgba(255, 255, 255, 0.1)',
+                    color: webSearchEnabled ? 'var(--accent)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    marginRight: '8px',
+                    boxShadow: webSearchEnabled ? '0 0 12px rgba(108, 92, 231, 0.3)' : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!webSearchEnabled) {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      e.currentTarget.style.color = 'var(--text)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!webSearchEnabled) {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                      e.currentTarget.style.color = 'var(--text-muted)';
+                    }
+                  }}
+                >
+                  <Globe size={18} />
+                </button>
                 <input
                   type="text"
                   className={styles.chatInput}
                   placeholder={
-                    sources.filter(s => s.enabled === 1 && s.sync_status === 'ready').length === 0
-                      ? "Hãy kích hoạt ít nhất 1 nguồn tài liệu để trò chuyện..."
-                      : "Hỏi mô hình về tài liệu nguồn của bạn..."
+                    webSearchEnabled
+                      ? "Hỏi mô hình kèm theo thông tin tra cứu từ internet..."
+                      : sources.filter(s => s.enabled === 1 && s.sync_status === 'ready').length === 0
+                        ? "Hãy kích hoạt ít nhất 1 nguồn tài liệu (hoặc bật Tra mạng) để trò chuyện..."
+                        : "Hỏi mô hình về tài liệu nguồn của bạn..."
                   }
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  disabled={isStreaming || sources.filter(s => s.enabled === 1 && s.sync_status === 'ready').length === 0}
+                  disabled={isStreaming || (!webSearchEnabled && sources.filter(s => s.enabled === 1 && s.sync_status === 'ready').length === 0)}
                 />
                 <button
                   type="submit"
                   className={styles.btnSubmit}
                   style={{ padding: '12px 20px', borderRadius: 'var(--radius-md)', height: '44px' }}
-                  disabled={isStreaming || !chatInput.trim() || sources.filter(s => s.enabled === 1 && s.sync_status === 'ready').length === 0}
+                  disabled={isStreaming || !chatInput.trim() || (!webSearchEnabled && sources.filter(s => s.enabled === 1 && s.sync_status === 'ready').length === 0)}
                 >
                   {isStreaming ? (
                     <Loader2 size={16} className="animate-spin" />

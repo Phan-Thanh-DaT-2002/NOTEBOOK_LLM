@@ -4,13 +4,14 @@ import { getDb } from '@/lib/db/connection.js';
 import { retrieveContext } from '@/lib/rag/retriever.js';
 import { buildPrompt } from '@/lib/rag/promptBuilder.js';
 import { getChatStream } from '@/lib/providers/chat-stream.js';
+import { searchWeb } from '@/lib/search/web-search.js';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { notebookId, question } = body;
+    const { notebookId, question, webSearchEnabled } = body;
 
     if (!notebookId || !question) {
       return NextResponse.json({
@@ -38,7 +39,18 @@ export async function POST(request) {
       chat_model: notebook.chat_model || settings.chat_model
     };
 
-    // 2. Retrieve semantic context chunks
+    // 2. Perform Web Search if enabled
+    let webResults = [];
+    if (webSearchEnabled) {
+      try {
+        console.log(`[Chat Stream] Performing Web Search for: "${question}"`);
+        webResults = await searchWeb(question, 5);
+      } catch (err) {
+        console.error('[Chat Stream] Web Search failed:', err);
+      }
+    }
+
+    // 2.5. Retrieve semantic context chunks
     const context = await retrieveContext(question, notebookId);
 
     // 3. Fetch past conversations history
@@ -49,8 +61,8 @@ export async function POST(request) {
       LIMIT 20
     `).all(notebookId);
 
-    // 4. Build messages prompt array
-    const promptMessages = buildPrompt(question, context, history, notebook);
+    // 4. Build messages prompt array with hybrid context
+    const promptMessages = buildPrompt(question, context, history, notebook, webResults);
 
     // 5. Establish streaming completions
     const llmStream = await getChatStream(promptMessages, activeSettings);
@@ -64,6 +76,13 @@ export async function POST(request) {
         let fullAnswer = '';
 
         try {
+          // If web search enabled, send web_sources SSE event first
+          if (webSearchEnabled && webResults.length > 0) {
+            controller.enqueue(
+              encoder.encode(`event: web_sources\ndata: ${JSON.stringify(webResults)}\n\n`)
+            );
+          }
+
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
