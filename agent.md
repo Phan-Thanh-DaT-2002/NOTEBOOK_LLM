@@ -46,7 +46,9 @@ We have three specialized skill repos packaged in the `.skills/` directory. You 
 - **Branching**: Do not commit directly to `main` or `master` without safety checks.
 - **Data Safety**: `/data/` must always be ignored.
 - **Credentials**: Never commit environment files `.env` or decrypted API keys.
-- **Remote Repo**: `https://github.com/Phan-Thanh-DaT-2002/NOTEBOOK_LLM.git`
+- **Remote Repo & Synchronization**:
+  - The official remote repository is **`https://github.com/Phan-Thanh-DaT-2002/NOTEBOOK_LLM.git`**.
+  - **CRITICAL RULE**: You MUST ALWAYS push all new commits and updates to this remote repository (`git push origin main`) at the end of every successful task, feature, bug fix, or milestone. Never finish a turn without pushing to ensure the user's remote is 100% up-to-date.
 
 ---
 
