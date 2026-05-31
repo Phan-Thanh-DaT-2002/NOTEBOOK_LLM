@@ -1264,6 +1264,9 @@ export default function Workspace() {
                                     });
                                   }
 
+                                  // Clean raw reasoning XML tags from output
+                                  contentStr = contentStr.replace(/<\/?(answer|thought)>/gi, '');
+
                                   let html = thinkingHtml + md.render(contentStr || '');
 
                                   // Replace Web citations first
