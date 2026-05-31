@@ -73,6 +73,7 @@ export default function Workspace() {
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [expandedThinkingMsgIds, setExpandedThinkingMsgIds] = useState({});
 
   // Layout Panel States
   const [sourcesCollapsed, setSourcesCollapsed] = useState(false);
@@ -1207,17 +1208,29 @@ export default function Workspace() {
                                   if (cit) {
                                     handleCitationClick(cit);
                                   }
+                                  return;
+                                }
+
+                                const details = e.target.closest('details');
+                                const summary = e.target.closest('summary');
+                                if (summary && details) {
+                                  e.preventDefault();
+                                  setExpandedThinkingMsgIds(prev => ({
+                                    ...prev,
+                                    [msg.id]: !prev[msg.id]
+                                  }));
                                 }
                               }}
                               dangerouslySetInnerHTML={{
                                 __html: (() => {
                                   let contentStr = msg.content || '';
                                   let thinkingHtml = '';
+                                  const isExpanded = !!expandedThinkingMsgIds[msg.id];
 
                                                                     // Extract and style closed <think> blocks
                                   contentStr = contentStr.replace(/<think>([\s\S]*?)<\/think>/gi, (match, thinkingText) => {
                                     thinkingHtml += `
-                                      <details style="
+                                      <details ${isExpanded ? 'open' : ''} style="
                                         background: rgba(255, 255, 255, 0.02);
                                         border-left: 2px solid var(--accent);
                                         padding: 8px 12px;
@@ -1253,7 +1266,7 @@ export default function Workspace() {
                                   if (contentStr.includes('<think>')) {
                                     contentStr = contentStr.replace(/<think>([\s\S]*)$/gi, (match, thinkingText) => {
                                       thinkingHtml += `
-                                        <details style="
+                                        <details ${isExpanded ? 'open' : ''} style="
                                           background: rgba(255, 255, 255, 0.02);
                                           border-left: 2px solid var(--accent);
                                           padding: 8px 12px;
