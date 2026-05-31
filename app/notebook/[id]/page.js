@@ -903,7 +903,7 @@ export default function Workspace() {
 
   if (loading) {
     return (
-      <div className={styles.workspace} style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <div className={styles.workspace} style={{ alignItems: 'center', justifyContent: 'center' }} suppressHydrationWarning>
         <Loader2 size={32} className="animate-spin" style={{ color: 'var(--accent)', marginBottom: '12px' }} />
         <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading workspace...</span>
       </div>
@@ -911,7 +911,7 @@ export default function Workspace() {
   }
 
   return (
-    <div className={styles.workspace}>
+    <div className={styles.workspace} suppressHydrationWarning>
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.headerLeft}>

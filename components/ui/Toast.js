@@ -30,7 +30,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <div className="toast-container">
+      <div className="toast-container" suppressHydrationWarning={true}>
         {toasts.map(t => (
           <div key={t.id} className={`toast-item toast-${t.type}`}>
             <div className="toast-icon">

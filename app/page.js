@@ -157,7 +157,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} suppressHydrationWarning>
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.logoSection}>
