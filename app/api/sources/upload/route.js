@@ -43,11 +43,13 @@ export async function POST(request) {
       fileType = 'csv';
     } else if (['.txt', '.text'].includes(extension)) {
       fileType = 'txt';
+    } else if (['.png', '.jpg', '.jpeg', '.webp'].includes(extension)) {
+      fileType = extension.slice(1);
     } else {
       // Reject unsupported formats
       return NextResponse.json({
         ok: false,
-        error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: `File extension ${extension} is not supported. Please upload PDF, DOCX, TXT, or MD.` }
+        error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: `File extension ${extension} is not supported. Please upload PDF, DOCX, TXT, MD, CSV, or Image (PNG, JPG, WEBP).` }
       }, { status: 415 });
     }
 

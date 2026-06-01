@@ -3,6 +3,8 @@ import { getDb } from '@/lib/db/connection.js';
 import fs from 'fs';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request, { params }) {
   try {
     const { id } = await params;

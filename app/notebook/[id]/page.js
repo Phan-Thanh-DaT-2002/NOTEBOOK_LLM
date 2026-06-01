@@ -7,7 +7,8 @@ import {
   ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose,
   FileText, HelpCircle, Layers, Sliders, Info, Loader2, Save,
   Plus, Trash2, Globe, Video, FileText as TextIcon, AlertTriangle, 
-  Check, X, Sparkles, Search, CheckSquare, Square, Pin, RotateCcw, Award, Clock
+  Check, X, Sparkles, Search, CheckSquare, Square, Pin, RotateCcw, Award, Clock,
+  Image as ImageIcon
 } from 'lucide-react';
 import MarkdownIt from 'markdown-it';
 import styles from './workspace.module.css';
@@ -29,6 +30,8 @@ export default function Workspace() {
   const [loading, setLoading] = useState(true);
   const [titleInput, setTitleInput] = useState('');
   const [savingTitle, setSavingTitle] = useState(false);
+  const [availableModels, setAvailableModels] = useState([]);
+  const [isUpdatingModel, setIsUpdatingModel] = useState(false);
 
   // Sources states
   const [sources, setSources] = useState([]);
@@ -82,13 +85,15 @@ export default function Workspace() {
 
   const chatEndRef = useRef(null);
   const highlightRef = useRef(null);
+  const chatHistoryRef = useRef(null);
+  const shouldAutoScrollRef = useRef(true);
 
   const fileInputRef = useRef(null);
 
   // Fetch Notebook details
   const fetchNotebookDetails = useCallback(async () => {
     try {
-      const res = await fetch(`/api/notebooks/${notebookId}`);
+      const res = await fetch(`/api/notebooks/${notebookId}?t=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
 
       if (json.ok && json.data) {
@@ -107,11 +112,51 @@ export default function Workspace() {
     }
   }, [notebookId, toast, router]);
 
+  // Fetch Available Models
+  const fetchAvailableModels = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/models?t=${Date.now()}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (json.ok && json.data?.models) {
+        setAvailableModels(json.data.models);
+      }
+    } catch (err) {
+      console.error('Error fetching available models:', err);
+    }
+  }, []);
+
+  // Update Notebook Model selection
+  const handleModelChange = async (selectedModel) => {
+    if (!selectedModel || selectedModel === notebook?.chat_model) return;
+
+    try {
+      setIsUpdatingModel(true);
+      const res = await fetch(`/api/notebooks/${notebookId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_model: selectedModel }),
+      });
+      const json = await res.json();
+
+      if (json.ok) {
+        setNotebook(json.data);
+        toast.success(`Đã đổi mô hình sang ${selectedModel}`);
+      } else {
+        toast.error(json.error?.message || 'Không thể thay đổi mô hình');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Lỗi kết nối khi thay đổi mô hình');
+    } finally {
+      setIsUpdatingModel(false);
+    }
+  };
+
   // Fetch Sources list
   const fetchSources = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoadingSources(true);
-      const res = await fetch(`/api/sources?notebookId=${notebookId}`);
+      const res = await fetch(`/api/sources?notebookId=${notebookId}&t=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.ok) {
         setSources(json.data);
@@ -128,7 +173,7 @@ export default function Workspace() {
   // Fetch Chat History
   const fetchChatHistory = useCallback(async () => {
     try {
-      const res = await fetch(`/api/chat/history?notebookId=${notebookId}`);
+      const res = await fetch(`/api/chat/history?notebookId=${notebookId}&t=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.ok && json.data) {
         setMessages(json.data);
@@ -142,7 +187,7 @@ export default function Workspace() {
   const fetchSuggestions = useCallback(async () => {
     try {
       setLoadingSuggestions(true);
-      const res = await fetch(`/api/chat/suggestions?notebookId=${notebookId}`);
+      const res = await fetch(`/api/chat/suggestions?notebookId=${notebookId}&t=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.ok && json.data) {
         setSuggestions(json.data);
@@ -158,7 +203,7 @@ export default function Workspace() {
   const fetchNotes = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoadingNotes(true);
-      const res = await fetch(`/api/notes?notebookId=${notebookId}`);
+      const res = await fetch(`/api/notes?notebookId=${notebookId}&t=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.ok) {
         setNotes(json.data);
@@ -176,7 +221,7 @@ export default function Workspace() {
   const fetchArtifacts = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoadingArtifacts(true);
-      const res = await fetch(`/api/artifacts?notebookId=${notebookId}`);
+      const res = await fetch(`/api/artifacts?notebookId=${notebookId}&t=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.ok) {
         setArtifacts(json.data);
@@ -191,17 +236,27 @@ export default function Workspace() {
   useEffect(() => {
     if (notebookId) {
       fetchNotebookDetails();
+      fetchAvailableModels();
       fetchSources(true);
       fetchChatHistory();
       fetchSuggestions();
       fetchNotes(true);
       fetchArtifacts(true);
     }
-  }, [notebookId, fetchNotebookDetails, fetchSources, fetchChatHistory, fetchSuggestions, fetchNotes, fetchArtifacts]);
+  }, [notebookId, fetchNotebookDetails, fetchAvailableModels, fetchSources, fetchChatHistory, fetchSuggestions, fetchNotes, fetchArtifacts]);
+
+  const handleChatScroll = () => {
+    const el = chatHistoryRef.current;
+    if (!el) return;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    shouldAutoScrollRef.current = isAtBottom;
+  };
 
   // Scroll chat history to bottom
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (shouldAutoScrollRef.current) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   // Scroll source viewer to highlighted citation quote
@@ -222,6 +277,7 @@ export default function Workspace() {
 
     setChatInput('');
     setIsStreaming(true);
+    shouldAutoScrollRef.current = true;
 
     const tempUserMsg = { 
       id: crypto.randomUUID(), 
@@ -580,6 +636,11 @@ export default function Workspace() {
       case 'docx': return <TextIcon size={18} style={{ color: '#54a0ff' }} />;
       case 'url': return <Globe size={18} style={{ color: '#1dd1a1' }} />;
       case 'youtube': return <Video size={18} style={{ color: '#ff9f43' }} />;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'webp':
+        return <ImageIcon size={18} style={{ color: '#fdcb6e' }} />;
       default: return <TextIcon size={18} style={{ color: '#a29bfe' }} />;
     }
   };
@@ -744,7 +805,7 @@ export default function Workspace() {
       // Setup polling interval to check status
       const interval = setInterval(async () => {
         try {
-          const pollRes = await fetch(`/api/artifacts?artifactId=${artifactId}`);
+          const pollRes = await fetch(`/api/artifacts?artifactId=${artifactId}&t=${Date.now()}`, { cache: 'no-store' });
           const pollJson = await pollRes.json();
           
           if (pollJson.ok && pollJson.data) {
@@ -797,7 +858,7 @@ export default function Workspace() {
 
   const handleOpenArtifact = async (artifact) => {
     try {
-      const res = await fetch(`/api/artifacts?artifactId=${artifact.id}`);
+      const res = await fetch(`/api/artifacts?artifactId=${artifact.id}&t=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.ok && json.data) {
         const fullArt = json.data;
@@ -938,9 +999,20 @@ export default function Workspace() {
 
         <div className={styles.headerRight}>
           {notebook?.chat_model && (
-            <span className={styles.modelBadge}>
-              {notebook.chat_model}
-            </span>
+            <select
+              className={styles.modelSelectBadge}
+              value={notebook.chat_model}
+              onChange={e => handleModelChange(e.target.value)}
+              disabled={isUpdatingModel}
+              title="Thay đổi mô hình cho sổ tay này"
+            >
+              {availableModels.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+              {!availableModels.includes(notebook.chat_model) && (
+                <option value={notebook.chat_model}>{notebook.chat_model}</option>
+              )}
+            </select>
           )}
           <button 
             className={styles.btnSettings} 
@@ -986,7 +1058,7 @@ export default function Workspace() {
               {isAddMenuOpen && (
                 <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
                   <button className={styles.btnCancel} style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px', border: 'none' }} onClick={() => { setActiveModal('file'); setIsAddMenuOpen(false); }}>
-                    <BookOpen size={16} /> Upload File (PDF, DOCX)
+                    <BookOpen size={16} /> Upload File (PDF, DOCX, Image)
                   </button>
                   <button className={styles.btnCancel} style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px', border: 'none' }} onClick={() => { setActiveModal('url'); setIsAddMenuOpen(false); }}>
                     <Globe size={16} /> Import Web Link
@@ -1150,7 +1222,11 @@ export default function Workspace() {
 
           <div className={styles.chatContainer}>
             {/* Messages Scroll View */}
-            <div className={styles.chatHistory}>
+            <div 
+              ref={chatHistoryRef}
+              onScroll={handleChatScroll}
+              className={styles.chatHistory}
+            >
               {messages.length === 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', alignItems: 'center' }}>
                   <EmptyState
@@ -1198,9 +1274,18 @@ export default function Workspace() {
                           </div>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start', maxWidth: '85%' }}>
-                            <div 
-                              className={`${styles.messageBubble} ${styles.messageBubbleAssistant} markdown-content`}
-                              onClick={(e) => {
+                            {isStreaming && !msg.content && messages[messages.length - 1]?.id === msg.id ? (
+                              <div className={`${styles.messageBubble} ${styles.messageBubbleAssistant} markdown-content`}>
+                                <div className={styles.typingIndicator}>
+                                  <span></span>
+                                  <span></span>
+                                  <span></span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div 
+                                className={`${styles.messageBubble} ${styles.messageBubbleAssistant} markdown-content`}
+                                onClick={(e) => {
                                 const trigger = e.target.closest('.citation-badge-trigger');
                                 if (trigger) {
                                   const index = parseInt(trigger.dataset.index, 10);
@@ -1211,18 +1296,18 @@ export default function Workspace() {
                                   return;
                                 }
 
-                                const details = e.target.closest('details');
                                 const summary = e.target.closest('summary');
-                                if (summary && details) {
+                                if (summary) {
                                   e.preventDefault();
+                                  const isCurrentlyExpanded = !!expandedThinkingMsgIds[msg.id];
                                   setExpandedThinkingMsgIds(prev => ({
                                     ...prev,
-                                    [msg.id]: !prev[msg.id]
+                                    [msg.id]: !isCurrentlyExpanded
                                   }));
                                 }
                               }}
-                              dangerouslySetInnerHTML={{
-                                __html: (() => {
+                                dangerouslySetInnerHTML={{
+                                  __html: (() => {
                                   let contentStr = msg.content || '';
                                   let thinkingHtml = '';
                                   const isExpanded = !!expandedThinkingMsgIds[msg.id];
@@ -1321,6 +1406,7 @@ export default function Workspace() {
                                 })()
                               }}
                             />
+                          )}
                             {msg.webSources && msg.webSources.length > 0 && (
                               <div style={{
                                 display: 'flex',
@@ -1867,14 +1953,14 @@ export default function Workspace() {
                 onClick={() => fileInputRef.current?.click()}
               >
                 <BookOpen size={32} style={{ color: 'var(--accent)', margin: '0 auto 12px' }} />
-                <div className={styles.dragAreaText}>Select a PDF, DOCX, MD, or TXT file</div>
+                <div className={styles.dragAreaText}>Select a PDF, DOCX, MD, TXT, CSV or Image (PNG, JPG, WEBP) file</div>
                 <div className={styles.dragAreaSub}>Maximum size: 10MB</div>
                 <input
                   type="file"
                   ref={fileInputRef}
                   style={{ display: 'none' }}
                   onChange={handleFileUpload}
-                  accept=".pdf,.docx,.txt,.text,.md,.csv"
+                  accept=".pdf,.docx,.txt,.text,.md,.csv,.png,.jpg,.jpeg,.webp"
                 />
               </div>
             </div>
