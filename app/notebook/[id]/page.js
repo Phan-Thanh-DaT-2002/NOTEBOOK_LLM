@@ -8,7 +8,7 @@ import {
   FileText, HelpCircle, Layers, Sliders, Info, Loader2, Save,
   Plus, Trash2, Globe, Video, FileText as TextIcon, AlertTriangle, 
   Check, X, Sparkles, Search, CheckSquare, Square, Pin, RotateCcw, Award, Clock,
-  Image as ImageIcon
+  Image as ImageIcon, Brain
 } from 'lucide-react';
 import MarkdownIt from 'markdown-it';
 import styles from './workspace.module.css';
@@ -17,6 +17,7 @@ import EmptyState from '@/components/ui/EmptyState.js';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.js';
 import MindMap from '@/components/studio/MindMap.js';
 import TimelineView from '@/components/studio/TimelineView.js';
+import { cleanAIText } from '@/lib/utils.js';
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
@@ -76,6 +77,7 @@ export default function Workspace() {
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [thinkEnabled, setThinkEnabled] = useState(true);
   const [expandedThinkingMsgIds, setExpandedThinkingMsgIds] = useState({});
 
   // Layout Panel States
@@ -301,7 +303,14 @@ export default function Workspace() {
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notebookId, question: queryText, webSearchEnabled }),
+        body: JSON.stringify({ 
+          notebookId, 
+          question: queryText, 
+          message: queryText, 
+          webSearchEnabled, 
+          use_web: webSearchEnabled, 
+          think: thinkEnabled 
+        }),
       });
 
       if (!response.ok) {
@@ -349,7 +358,7 @@ export default function Workspace() {
                 ));
               } else if (currentEvent === 'done') {
                 setMessages(prev => prev.map(m => 
-                  m.id === tempAssistantMsg.id ? { ...m, id: json.messageId } : m
+                  m.id === tempAssistantMsg.id ? { ...m, id: json.messageId, content: json.content || m.content } : m
                 ));
               } else if (currentEvent === 'error') {
                 toast.error(json.message || 'Stream error');
@@ -1341,7 +1350,7 @@ export default function Workspace() {
                                           <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 2px;"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-4.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-4.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2Z"/></svg>
                                           Tiến trình suy nghĩ của AI (Nhấp để mở rộng)
                                         </summary>
-                                        <div style="opacity: 0.85; margin-top: 8px; font-style: italic; line-height: 1.5;">${md.render(thinkingText)}</div>
+                                        <div style="opacity: 0.85; margin-top: 8px; font-style: italic; line-height: 1.5;">${md.render(cleanAIText(thinkingText))}</div>
                                       </details>
                                     `;
                                     return '';
@@ -1377,7 +1386,7 @@ export default function Workspace() {
                                             <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: pulse 1.5s infinite; margin-right: 2px;"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-4.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-4.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2Z"/></svg>
                                             AI đang suy nghĩ... (Nhấp để mở rộng)
                                           </summary>
-                                          <div style="opacity: 0.85; margin-top: 8px; font-style: italic; line-height: 1.5;">${md.render(thinkingText)}</div>
+                                          <div style="opacity: 0.85; margin-top: 8px; font-style: italic; line-height: 1.5;">${md.render(cleanAIText(thinkingText))}</div>
                                         </details>
                                       `;
                                       return '';
@@ -1387,7 +1396,7 @@ export default function Workspace() {
                                   // Clean raw reasoning XML tags from output
                                   contentStr = contentStr.replace(/<\/?(answer|thought)>/gi, '');
 
-                                  let html = thinkingHtml + md.render(contentStr || '');
+                                  let html = thinkingHtml + md.render(cleanAIText(contentStr || ''));
 
                                   // Replace Web citations first
                                   html = html.replace(/\[Web Result (\d+)\]/g, (match, digit) => {
@@ -1396,9 +1405,19 @@ export default function Workspace() {
                                     const titleStr = ws ? `Nguồn web: ${ws.title}\n${ws.url}` : 'Xem liên kết';
                                     return ws ? `<a href="${ws.url}" target="_blank" rel="noopener noreferrer" title="${titleStr}" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 184, 148, 0.15); border: 1px solid rgba(0, 184, 148, 0.3); color: #00b894; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 4px; margin: 0 2px; text-decoration: none; vertical-align: super;"><span style="display: inline-flex; align-items: center; gap: 2px;"><svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg> Web ${index}</span></a>` : `<span style="display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 184, 148, 0.15); border: 1px solid rgba(0, 184, 148, 0.3); color: #00b894; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 4px; margin: 0 2px; vertical-align: super;">Web ${index}</span>`;
                                   });
-                                  // Replace Local citations second
+                                  // Replace Local/Web citations second
                                   return html.replace(/\[(\d+)\]/g, (match, digit) => {
                                     const index = parseInt(digit, 10);
+                                    
+                                    // If web sources are present and no local citations exist, render [1] as Web Result 1
+                                    if (msg.webSources && msg.webSources.length > 0 && (!msg.citations || msg.citations.length === 0)) {
+                                      const ws = msg.webSources[index - 1];
+                                      const titleStr = ws ? `Nguồn web: ${ws.title}\n${ws.url}` : 'Xem liên kết';
+                                      return ws 
+                                        ? `<a href="${ws.url}" target="_blank" rel="noopener noreferrer" title="${titleStr}" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 184, 148, 0.15); border: 1px solid rgba(0, 184, 148, 0.3); color: #00b894; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 4px; margin: 0 2px; text-decoration: none; vertical-align: super;"><span style="display: inline-flex; align-items: center; gap: 2px;"><svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg> Web ${index}</span></a>`
+                                        : `<span style="display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 184, 148, 0.15); border: 1px solid rgba(0, 184, 148, 0.3); color: #00b894; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 4px; margin: 0 2px; vertical-align: super;">Web ${index}</span>`;
+                                    }
+
                                     const cit = msg.citations?.find(c => c.citation_index === index);
                                     const titleStr = cit ? `Nguồn: ${cit.filename} ${cit.page_number ? `(Trang ${cit.page_number})` : ''}` : 'Xem trích dẫn';
                                     return `<span class="citation-badge-trigger" data-index="${index}" title="${titleStr}" style="display: inline-flex; align-items: center; justify-content: center; background: rgba(108, 92, 231, 0.15); border: 1px solid rgba(108, 92, 231, 0.3); color: var(--accent); font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 4px; margin: 0 2px; cursor: pointer; vertical-align: super;">${index}</span>`;
@@ -1545,6 +1564,43 @@ export default function Workspace() {
                   }}
                 >
                   <Globe size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setThinkEnabled(prev => !prev)}
+                  title={thinkEnabled ? "Tắt chế độ suy nghĩ (AI Thinking ON)" : "Bật chế độ suy nghĩ (AI Thinking OFF)"}
+                  aria-label="Toggle AI Thinking"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: 'var(--radius-md)',
+                    background: thinkEnabled ? 'rgba(108, 92, 231, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                    border: thinkEnabled ? '1px solid var(--accent)' : '1px solid rgba(255, 255, 255, 0.1)',
+                    color: thinkEnabled ? 'var(--accent)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    marginRight: '8px',
+                    boxShadow: thinkEnabled ? '0 0 12px rgba(108, 92, 231, 0.3)' : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!thinkEnabled) {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      e.currentTarget.style.color = 'var(--text)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!thinkEnabled) {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                      e.currentTarget.style.color = 'var(--text-muted)';
+                    }
+                  }}
+                >
+                  <Brain size={18} />
                 </button>
                 <input
                   type="text"
@@ -2165,9 +2221,9 @@ export default function Workspace() {
                     return <TimelineView events={events} />;
                   }
                 } catch (e) {}
-                return <div dangerouslySetInnerHTML={{ __html: md.render(activeArtifact.output_markdown || '') }} />;
+                return <div dangerouslySetInnerHTML={{ __html: md.render(cleanAIText(activeArtifact.output_markdown || '')) }} />;
               })() : (
-                <div dangerouslySetInnerHTML={{ __html: md.render(activeArtifact.output_markdown || '') }} />
+                <div dangerouslySetInnerHTML={{ __html: md.render(cleanAIText(activeArtifact.output_markdown || '')) }} />
               )}
             </div>
             <div className={styles.modalFooterBar}>

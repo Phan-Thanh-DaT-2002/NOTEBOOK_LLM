@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db/connection.js';
 import { generateCompletion } from '@/lib/providers/llm.js';
+import { cleanAIText } from '@/lib/utils.js';
 import crypto from 'crypto';
 
 export async function POST(request) {
@@ -212,6 +213,24 @@ Lưu ý: Không viết bất kỳ lời dẫn nhập hay kết luận nào ngoà
         throw new Error('LLM không trả về đúng cấu trúc dữ liệu ôn tập yêu cầu. Hãy thử lại.');
       }
 
+      // Clean string fields in flashcards/quiz
+      const cleanedItems = parsedItems.map(item => {
+        if (type === 'flashcards') {
+          return {
+            front: cleanAIText(item.front),
+            back: cleanAIText(item.back)
+          };
+        } else if (type === 'quiz') {
+          return {
+            question: cleanAIText(item.question),
+            options: Array.isArray(item.options) ? item.options.map(opt => cleanAIText(opt)) : [],
+            answerIndex: typeof item.answerIndex === 'number' ? item.answerIndex : 0,
+            explanation: cleanAIText(item.explanation)
+          };
+        }
+        return item;
+      });
+
       const insertStmt = db.prepare(`
         INSERT INTO artifact_items (id, artifact_id, item_type, content_json, sort_order)
         VALUES (?, ?, ?, ?, ?)
@@ -225,15 +244,15 @@ Lưu ý: Không viết bất kỳ lời dẫn nhập hay kết luận nào ngoà
         });
       });
       
-      insertTransaction(parsedItems);
+      insertTransaction(cleanedItems);
 
       let previewMd = '';
       if (type === 'flashcards') {
-        previewMd = `### Bộ thẻ ghi nhớ Flashcards (${parsedItems.length} thẻ)\n\n` + 
-          parsedItems.map((item, idx) => `**Thẻ ${idx + 1}**\n- Mặt trước: ${item.front}\n- Mặt sau: ${item.back}`).join('\n\n');
+        previewMd = `### Bộ thẻ ghi nhớ Flashcards (${cleanedItems.length} thẻ)\n\n` + 
+          cleanedItems.map((item, idx) => `**Thẻ ${idx + 1}**\n- Mặt trước: ${item.front}\n- Mặt sau: ${item.back}`).join('\n\n');
       } else {
-        previewMd = `### Bài trắc nghiệm Quiz (${parsedItems.length} câu hỏi)\n\n` +
-          parsedItems.map((item, idx) => `**Câu hỏi ${idx + 1}: ${item.question}**\n` + 
+        previewMd = `### Bài trắc nghiệm Quiz (${cleanedItems.length} câu hỏi)\n\n` +
+          cleanedItems.map((item, idx) => `**Câu hỏi ${idx + 1}: ${item.question}**\n` + 
             item.options.map((opt, oIdx) => `- ${oIdx === item.answerIndex ? '[x]' : '[ ]'} ${opt}`).join('\n') + 
             `\n*Giải thích:* ${item.explanation}`).join('\n\n');
       }
@@ -247,6 +266,9 @@ Lưu ý: Không viết bất kỳ lời dẫn nhập hay kết luận nào ngoà
       let cleanOutput = output.trim();
       if ((type === 'mind_map' || type === 'timeline') && cleanOutput.startsWith('```')) {
         cleanOutput = cleanOutput.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '').trim();
+      }
+      if (type === 'briefing_doc' || type === 'study_guide' || type === 'faq') {
+        cleanOutput = cleanAIText(cleanOutput);
       }
       db.prepare(`
         UPDATE artifacts 

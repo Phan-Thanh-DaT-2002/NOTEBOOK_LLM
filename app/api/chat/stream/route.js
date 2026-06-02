@@ -5,13 +5,29 @@ import { retrieveContext } from '@/lib/rag/retriever.js';
 import { buildPrompt } from '@/lib/rag/promptBuilder.js';
 import { getChatStream } from '@/lib/providers/chat-stream.js';
 import { searchWeb } from '@/lib/search/web-search.js';
+import { cleanAIText } from '@/lib/utils.js';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { notebookId, question, webSearchEnabled } = body;
+    const body = await request.json().catch(() => ({}));
+    
+    let question = body.question || body.message;
+    let requestHistory = body.history || [];
+    let model = body.model;
+    let think = body.think !== undefined ? body.think : true;
+    const { notebookId, webSearchEnabled, use_web } = body;
+    const isWebSearchEnabled = !!(webSearchEnabled || use_web);
+
+    // Support OpenAI/Ollama compatible messages format
+    if (body.messages && Array.isArray(body.messages) && body.messages.length > 0) {
+      const lastMsg = body.messages[body.messages.length - 1];
+      if (lastMsg && lastMsg.role === 'user') {
+        question = lastMsg.content;
+      }
+      requestHistory = body.messages.slice(0, -1);
+    }
 
     if (!question) {
       return NextResponse.json({
@@ -19,6 +35,12 @@ export async function POST(request) {
         error: { code: 'BAD_REQUEST', message: 'question is required' }
       }, { status: 400 });
     }
+
+    let actualQuestion = question;
+    if (question.includes('[CÂU HỎI CỦA NGƯỜI DÙNG]')) {
+      actualQuestion = question.split('[CÂU HỎI CỦA NGƯỜI DÙNG]')[1] || question;
+    }
+    actualQuestion = actualQuestion.trim();
 
     const db = getDb();
     const settings = db.prepare('SELECT * FROM settings WHERE id = ?').get('global');
@@ -37,15 +59,20 @@ export async function POST(request) {
 
       activeSettings = {
         ...settings,
-        chat_model: notebook.chat_model || settings.chat_model
+        chat_model: model || notebook.chat_model || settings.chat_model
+      };
+    } else {
+      activeSettings = {
+        ...settings,
+        chat_model: model || settings.chat_model
       };
     }
 
     // 2. Perform Web Search if enabled
     let webResults = [];
-    if (webSearchEnabled) {
+    if (isWebSearchEnabled) {
       try {
-        let searchQuery = question;
+        let searchQuery = actualQuestion;
         const prefixToRemove = [
           /^(tra cứu internet xem|tra cứu mạng xem|tra cứu mạng|tra cứu internet|tìm kiếm mạng|tìm trên mạng|tìm kiếm trên mạng|hãy tìm kiếm trên mạng|hãy tìm trên mạng|tìm google|search google|search internet|google search)\s+/i,
           /^(hãy cho biết|cho tôi biết|cho hỏi|hỏi xem|xem|tìm|search for|find info about|lookup|look up)\s+/i
@@ -55,7 +82,7 @@ export async function POST(request) {
         }
         searchQuery = searchQuery.trim();
 
-        console.log(`[Chat Stream] Performing Web Search for: "${searchQuery}" (Original: "${question}")`);
+        console.log(`[Chat Stream] Performing Web Search for: "${searchQuery}" (Original: "${actualQuestion}")`);
         webResults = await searchWeb(searchQuery, 5);
       } catch (err) {
         console.error('[Chat Stream] Web Search failed:', err);
@@ -65,7 +92,52 @@ export async function POST(request) {
     let promptMessages;
     let context = [];
 
-    if (notebookId) {
+    if (isWebSearchEnabled) {
+      let searchResultsText = '';
+      if (webResults && webResults.length > 0) {
+        searchResultsText = webResults.map((r, idx) => {
+          let text = `[${idx + 1}] (Nguồn: ${r.title}, Link: ${r.url}):\n"${r.snippet}"`;
+          if (r.content) {
+            text += `\nNội dung chi tiết trang:\n"${r.content}"`;
+          }
+          return text;
+        }).join('\n\n');
+      } else {
+        searchResultsText = 'Không tìm thấy kết quả tìm kiếm trên mạng.';
+      }
+
+      const currentDate = new Date().toLocaleDateString('vi-VN', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Ho_Chi_Minh'
+      });
+
+      let pageContextText = '';
+      if (question.includes('[NGỮ CẢNH TRANG WEB HIỆN TẠI]')) {
+        pageContextText = question.split('[CÂU HỎI CỦA NGƯỜI DÙNG]')[0] || '';
+      }
+
+      let userContent = '';
+      if (pageContextText.trim()) {
+        userContent += `${pageContextText.trim()}\n\n`;
+      }
+      userContent += `Câu hỏi: ${actualQuestion}\n\nWEB_CONTEXT:\n${searchResultsText}`;
+
+      promptMessages = [
+        {
+          role: "system",
+          content: `Bạn là trợ lý trợ giúp người dùng.\nThời gian hệ thống của server hiện tại: ${currentDate}.\nĐối chiếu thời gian hệ thống với WEB_CONTEXT để trả lời. Trả lời ngắn gọn, đi thẳng vào câu hỏi. Tuyệt đối KHÔNG vẽ bảng biểu phân tích, KHÔNG so sánh chi tiết các nguồn, và KHÔNG đưa thông tin minh họa dài dòng. Trả lời súc tích, chỉ dẫn nguồn (ví dụ: [1]) khi kết thúc câu.`
+        },
+        {
+          role: "user",
+          content: userContent
+        }
+      ];
+    } else if (notebookId) {
       // 2.5. Retrieve semantic context chunks
       context = await retrieveContext(question, notebookId);
 
@@ -81,14 +153,8 @@ export async function POST(request) {
       promptMessages = buildPrompt(question, context, history, notebook, webResults);
     } else {
       // General Q&A: parse conversation history from request body if available
-      const requestHistory = body.history || [];
+      const parsedHistory = requestHistory;
       
-      // Extract user's actual typed question (excluding Kintone page context)
-      let actualQuestion = question;
-      if (question.includes('[CÂU HỎI CỦA NGƯỜI DÙNG]')) {
-        actualQuestion = question.split('[CÂU HỎI CỦA NGƯỜI DÙNG]')[1] || question;
-      }
-
       // Check if user's actual question contains Vietnamese diacritics (e.g. à, á, đ, ồ, vv.)
       const hasVietnameseDiacritics = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(actualQuestion);
 
@@ -130,7 +196,7 @@ Quy tắc hoạt động (行動規範):
     }
 
     // 5. Establish streaming completions
-    const llmStream = await getChatStream(promptMessages, activeSettings);
+    const llmStream = await getChatStream(promptMessages, activeSettings, think);
     const llmReader = llmStream.getReader();
 
     // 6. Return response stream using TransformStream for real-time flushing
@@ -146,7 +212,7 @@ Quy tắc hoạt động (行動規範):
 
       try {
         // If web search enabled, send web_sources SSE event first
-        if (webSearchEnabled && webResults.length > 0) {
+        if (isWebSearchEnabled && webResults.length > 0) {
           await writer.write(
             encoder.encode(`event: web_sources\ndata: ${JSON.stringify(webResults)}\n\n`)
           );
@@ -164,6 +230,8 @@ Quy tắc hoạt động (行動規範):
           );
         }
 
+        const cleanedAnswer = cleanAIText(fullAnswer);
+
         if (notebookId) {
           // Ingestion completion: Save messages into database
           const userMsgId = crypto.randomUUID();
@@ -180,7 +248,7 @@ Quy tắc hoạt động (行動規範):
             db.prepare(`
               INSERT INTO chat_messages (id, notebook_id, role, content)
               VALUES (?, ?, 'assistant', ?)
-            `).run(assistantMsgId, notebookId, fullAnswer);
+            `).run(assistantMsgId, notebookId, cleanedAnswer);
           })();
 
           // Parse and record citations
@@ -189,7 +257,7 @@ Quy tắc hoạt động (行動規範):
           const seenIndices = new Set();
           let match;
 
-          while ((match = citationRegex.exec(fullAnswer)) !== null) {
+          while ((match = citationRegex.exec(cleanedAnswer)) !== null) {
             const index = parseInt(match[1], 10);
             if (index > 0 && index <= context.length) {
               const chunk = context[index - 1];
@@ -240,12 +308,12 @@ Quy tắc hoạt động (行動規範):
 
           // Send done SSE event
           await writer.write(
-            encoder.encode(`event: done\ndata: ${JSON.stringify({ messageId: assistantMsgId })}\n\n`)
+            encoder.encode(`event: done\ndata: ${JSON.stringify({ messageId: assistantMsgId, content: cleanedAnswer })}\n\n`)
           );
         } else {
           // Send done SSE event for General Q&A
           await writer.write(
-            encoder.encode(`event: done\ndata: ${JSON.stringify({ messageId: crypto.randomUUID() })}\n\n`)
+            encoder.encode(`event: done\ndata: ${JSON.stringify({ messageId: crypto.randomUUID(), content: cleanAIText(fullAnswer) })}\n\n`)
           );
         }
 
